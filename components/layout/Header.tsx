@@ -1,29 +1,51 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { BellIcon, UserCircleIcon, ArrowLeftOnRectangleIcon } from '@heroicons/react/24/outline';
-import { MOCK_NOTIFICATIONS } from '../../constants'; // Using mock notifications
+// ❌ Ya no se necesita MOCK_NOTIFICATIONS
+// import { MOCK_NOTIFICATIONS } from '../../constants';
 import { AppNotification } from '../../types';
 import { format } from 'date-fns';
-import { es } from 'date-fns/locale/es'; // Import Spanish locale
+import { es } from 'date-fns/locale/es';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios'; // 🆕 Importar axios para llamadas al backend
 
 const Header: React.FC = () => {
   const { currentUser, logout } = useAuth();
+  const navigate = useNavigate();
+  const [notifications, setNotifications] = useState<AppNotification[]>([]); // 🆕 Usar estado real
+  const [isOpen, setIsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  // Simulate unread notifications count
-  const unreadNotificationsCount = MOCK_NOTIFICATIONS.filter(n => !n.isRead).length;
+  // 🆕 Cargar notificaciones reales al montar el componente
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const res = await axios.get('http://localhost:4000/api/notifications');
+        setNotifications(res.data);
+      } catch (error) {
+        console.error('Error al obtener notificaciones:', error);
+      }
+    };
 
-  if (!currentUser) return null; // Should not happen if routing is correct
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 60000); // refresca cada 60s
+    return () => clearInterval(interval);
+  }, []);
+
+  // 🆕 Contar cuántas no están leídas (tu endpoint ya entrega solo las no leídas)
+  const unreadNotificationsCount = notifications.length;
+
+  if (!currentUser) return null;
 
   return (
     <header className="bg-white shadow-sm sticky top-0 z-40">
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div>
-            {/* Placeholder for breadcrumbs or page title if needed */}
-            <h2 className="text-xl font-semibold text-gray-700">Bienvenido/a, {currentUser.name}</h2>
+            <h2 className="text-xl font-semibold text-gray-700">
+              Bienvenido/a, {currentUser.name}
+            </h2>
           </div>
           <div className="flex items-center space-x-4">
             {/* Notifications */}
@@ -46,26 +68,59 @@ const Header: React.FC = () => {
                     <div className="px-4 py-2 border-b">
                       <h3 className="text-sm font-medium text-gray-900">Notificaciones</h3>
                     </div>
-                    {MOCK_NOTIFICATIONS.length === 0 ? (
-                       <p className="text-sm text-gray-500 px-4 py-3">No hay notificaciones nuevas.</p>
+                    {notifications.length === 0 ? (
+                      <p className="text-sm text-gray-500 px-4 py-3">No hay notificaciones nuevas.</p>
                     ) : (
-                      MOCK_NOTIFICATIONS.map((notification: AppNotification) => (
+                      notifications.map((notification: AppNotification) => (
                         <a
                           key={notification.id}
                           href={notification.link || '#'}
-                          className={`block px-4 py-3 text-sm ${notification.isRead ? 'text-gray-500' : 'text-gray-700 font-medium'} hover:bg-gray-100 border-b last:border-b-0`}
-                          onClick={() => setNotificationsOpen(false)} // and mark as read ideally
+                          className={`block px-4 py-3 text-sm hover:bg-gray-100 border-b last:border-b-0 ${
+                            notification.is_read
+                              ? 'text-gray-500'
+                              : 'text-gray-700 font-medium'
+                          }`}
+                          onClick={async (e) => {
+                            e.preventDefault(); // evita navegación directa
+                            try {
+                              await axios.post(`http://localhost:4000/api/notifications/${notification.id}/read`);
+                              setNotifications((prev) =>
+                                prev.filter((n) => n.id !== notification.id)
+                              );
+                              setNotificationsOpen(false);
+                            } catch (err) {
+                              console.error('Error al marcar como leída:', err);
+                            }
+                          }}
                         >
-                          <p className={`font-semibold ${notification.type === 'error' ? 'text-red-600' : notification.type === 'warning' ? 'text-yellow-600' : 'text-blue-600'}`}>
+                          <p
+                            className={`font-semibold ${
+                              notification.type === 'maintenance_overdue'
+                                ? 'text-red-600'
+                                : notification.type === 'maintenance_due'
+                                ? 'text-yellow-600'
+                                : notification.type === 'new_issue'
+                                ? 'text-blue-600'
+                                : 'text-gray-600'
+                            }`}
+                          >
                             {notification.message}
                           </p>
-                          {notification.details && <p className="text-xs text-gray-500">{notification.details}</p>}
-                          <p className="text-xs text-gray-400 mt-1">{format(new Date(notification.timestamp), 'MMM d, yyyy HH:mm', { locale: es })}</p>
+                          {notification.details && (
+                            <p className="text-xs text-gray-500">{notification.details}</p>
+                          )}
+                          <p className="text-xs text-gray-400 mt-1">
+                            {format(new Date(notification.created_at), 'MMM d, yyyy HH:mm', {
+                              locale: es,
+                            })}
+                          </p>
                         </a>
                       ))
                     )}
                     <div className="px-4 py-2 border-t">
-                        <button className="text-sm text-bioren-blue hover:underline w-full text-center">Ver todas las notificaciones</button>
+                      <button className="text-sm text-bioren-blue hover:underline w-full text-center">
+                        Ver todas las notificaciones
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -80,12 +135,17 @@ const Header: React.FC = () => {
               >
                 <span className="sr-only">Abrir menú de usuario</span>
                 <UserCircleIcon className="h-8 w-8 text-gray-500" />
-                <span className="ml-2 hidden md:block text-gray-700">{currentUser.name} ({currentUser.role})</span>
+                <span className="ml-2 hidden md:block text-gray-700">
+                  {currentUser.name} ({currentUser.role})
+                </span>
               </button>
               {userMenuOpen && (
                 <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none">
                   <button
-                    onClick={() => { logout(); setUserMenuOpen(false); }}
+                    onClick={() => {
+                      logout();
+                      setUserMenuOpen(false);
+                    }}
                     className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                   >
                     <ArrowLeftOnRectangleIcon className="w-5 h-5 mr-2 text-gray-500" />

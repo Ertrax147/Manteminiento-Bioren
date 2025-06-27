@@ -80,12 +80,14 @@ export interface IssueReport {
 
 export interface AppNotification {
   id: string;
-  type: 'info' | 'warning' | 'error' | 'success';
   message: string;
+  created_at: string;
+  is_read?: boolean;
+  equipmentId?: string;
+  type: 'info' | 'warning' | 'error' | 'success' | 'maintenance_due' | 'maintenance_overdue' | 'new_issue'; 
   details?: string;
   link?: string;
-  timestamp: string;
-  isRead: boolean;
+  timestamp?: string; 
 }
 
 // La interfaz NavItem SÍ se queda aquí, en el frontend

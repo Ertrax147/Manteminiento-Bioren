@@ -6,6 +6,7 @@ import path from 'path'; // <-- 1. IMPORTA la librería 'path'
 import equipmentRoutes from './routes/equipment';
 import issueRoutes from './routes/issues';
 import userRoutes from './routes/users';
+import notificacionesRoutes from './routes/notificaciones';
 
 const app = express();
 const PORT = 4000;
@@ -23,6 +24,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/api/equipment', equipmentRoutes);
 app.use('/api/issues', issueRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/notifications', notificacionesRoutes);
 
 app.listen(PORT, () => {
     console.log(`🚀 Servidor backend corriendo en http://localhost:${PORT}`);
