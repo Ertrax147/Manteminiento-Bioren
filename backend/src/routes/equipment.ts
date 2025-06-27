@@ -60,27 +60,35 @@ router.get('/:id', async (req: Request, res: Response) => {
     }
 });
 
-// POST /api/equipment
-router.post('/', async (req: Request, res: Response) => {
+// POST /api/equipment - Modificada para aceptar un archivo
+router.post('/', upload.single('initialDoc'), async (req: Request, res: Response) => {
     try {
-        const newEquipment: Equipment = req.body;
-        if (!newEquipment || !newEquipment.id || !newEquipment.name) {
+        const newEquipmentData = req.body;
+        const attachment = req.file;
+
+        if (!newEquipmentData || !newEquipmentData.id || !newEquipmentData.name) {
             return res.status(400).json({ message: 'Faltan campos requeridos (id, name).' });
         }
-        const sqlQuery = `INSERT INTO equipment (id, name, brand, model, locationBuilding, locationUnit, lastCalibrationDate, lastMaintenanceDate, encargado, maintenanceFrequencyValue, maintenanceFrequencyUnit, customMaintenanceInstructions, criticality) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+        const sqlQuery = `INSERT INTO equipment (id, name, brand, model, locationBuilding, locationUnit, lastCalibrationDate, lastMaintenanceDate, encargado, maintenanceFrequencyValue, maintenanceFrequencyUnit, customMaintenanceInstructions, criticality, initialDocPath) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
         const formatDate = (date: string | undefined | null): string | null => {
             if (!date) return null;
             return new Date(date).toISOString().split('T')[0];
         };
+
         const values = [
-            newEquipment.id, newEquipment.name, newEquipment.brand || null, newEquipment.model || null,
-            newEquipment.locationBuilding || null, newEquipment.locationUnit || null,
-            formatDate(newEquipment.lastCalibrationDate),
-            formatDate(newEquipment.lastMaintenanceDate),
-            newEquipment.encargado || null, newEquipment.maintenanceFrequency?.value || null,
-            newEquipment.maintenanceFrequency?.unit || null,
-            newEquipment.customMaintenanceInstructions || null, newEquipment.criticality || null
+            newEquipmentData.id, newEquipmentData.name, newEquipmentData.brand || null,
+            newEquipmentData.model || null, newEquipmentData.locationBuilding || null,
+            newEquipmentData.locationUnit || null, formatDate(newEquipmentData.lastCalibrationDate),
+            formatDate(newEquipmentData.lastMaintenanceDate), newEquipmentData.encargado || null,
+            newEquipmentData.maintenanceFrequency_value, // Ojo con los nombres que envía FormData
+            newEquipmentData.maintenanceFrequency_unit,
+            newEquipmentData.customMaintenanceInstructions || null,
+            newEquipmentData.criticality || null,
+            attachment ? attachment.path : null // Guardamos la ruta del archivo
         ];
+
         await pool.query(sqlQuery, values);
         return res.status(201).json({ message: 'Equipo creado exitosamente' });
     } catch (error) {

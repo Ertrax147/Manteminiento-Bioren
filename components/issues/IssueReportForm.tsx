@@ -14,12 +14,12 @@ interface IssueReportFormProps {
     equipmentIdFromUrl?: string;
     onSubmit: (issueReport: any) => void;
     onCancel: () => void;
+    onFileChange: (file: File | null) => void; // <-- Prop para notificar el cambio de archivo
 }
 
-const IssueReportForm: React.FC<IssueReportFormProps> = ({ initialData, equipmentIdFromUrl, onSubmit, onCancel }) => {
+const IssueReportForm: React.FC<IssueReportFormProps> = ({ initialData, equipmentIdFromUrl, onSubmit, onCancel, onFileChange }) => {
     const { currentUser } = useAuth();
 
-    // Estado para guardar la lista de equipos cargada desde la API
     const [availableEquipment, setAvailableEquipment] = useState<Equipment[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -28,22 +28,17 @@ const IssueReportForm: React.FC<IssueReportFormProps> = ({ initialData, equipmen
             equipmentId: equipmentIdFromUrl || '',
             severity: IssueSeverity.MINOR,
             status: 'Abierto',
-            attachments: [],
         }
     );
     const [errors, setErrors] = useState<Partial<Record<keyof IssueReport, string>>>({});
 
-    // useEffect para buscar la lista de equipos desde la API
     useEffect(() => {
         const fetchEquipmentList = async () => {
             try {
                 const response = await fetch('http://localhost:4000/api/equipment');
-                if (!response.ok) {
-                    throw new Error('No se pudo cargar la lista de equipos.');
-                }
+                if (!response.ok) throw new Error('No se pudo cargar la lista de equipos.');
                 const data: Equipment[] = await response.json();
 
-                // Si el usuario es un Jefe de Unidad, filtramos los equipos por su unidad
                 if (currentUser?.role === 'Jefe de Unidad' && currentUser.unit) {
                     setAvailableEquipment(data.filter(eq => eq.locationUnit === currentUser.unit));
                 } else {
@@ -56,14 +51,12 @@ const IssueReportForm: React.FC<IssueReportFormProps> = ({ initialData, equipmen
                 setIsLoading(false);
             }
         };
-
         fetchEquipmentList();
     }, [currentUser]);
 
-
     useEffect(() => {
         if (equipmentIdFromUrl && !initialData) {
-            setFormData(prev => ({...prev, equipmentId: equipmentIdFromUrl}));
+            setFormData(prev => ({ ...prev, equipmentId: equipmentIdFromUrl }));
         }
     }, [equipmentIdFromUrl, initialData]);
 
@@ -72,17 +65,9 @@ const IssueReportForm: React.FC<IssueReportFormProps> = ({ initialData, equipmen
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-        if (errors[name as keyof IssueReport]) {
-            setErrors(prev => ({...prev, [name]: undefined}));
-        }
     };
 
-    const handleFileChange = (file: File | null) => {
-        if (file) {
-            setFormData(prev => ({ ...prev, attachments: [...(prev.attachments || []), { name: file.name, url: '#'}] }));
-        }
-    };
-
+    // La lógica de validación se mantiene igual
     const validate = (): boolean => {
         const newErrors: Partial<Record<keyof IssueReport, string>> = {};
         if (!formData.equipmentId) newErrors.equipmentId = 'La selección del equipo es requerida.';
@@ -95,9 +80,7 @@ const IssueReportForm: React.FC<IssueReportFormProps> = ({ initialData, equipmen
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (validate()) {
-            // Buscamos el nombre del equipo seleccionado para añadirlo al reporte
             const selectedEquipmentName = availableEquipment.find(eq => eq.id === formData.equipmentId)?.name || 'Equipo Desconocido';
-
             const finalData = {
                 ...formData,
                 equipmentName: selectedEquipmentName,
@@ -106,7 +89,6 @@ const IssueReportForm: React.FC<IssueReportFormProps> = ({ initialData, equipmen
         }
     };
 
-    // Si está cargando los equipos, muestra un mensaje
     if (isLoading) {
         return <div className="text-center p-8">Cargando lista de equipos...</div>
     }
@@ -133,18 +115,12 @@ const IssueReportForm: React.FC<IssueReportFormProps> = ({ initialData, equipmen
                 options={ISSUE_SEVERITY_OPTIONS} value={formData.severity || ''}
                 onChange={handleChange} error={errors.severity} required
             />
+            {/* --- LÍNEA CORREGIDA --- */}
+            {/* Ahora el FileInput llama directamente a la función onFileChange que le pasamos como prop */}
             <FileInput
-                label="Adjuntar Imagen o PDF (Opcional)" id="issueAttachment" name="issueAttachment"
-                accept=".pdf,.png,.jpg,.jpeg" onFileChange={handleFileChange}
+                label="Adjuntar Imagen o PDF (Opcional)" id="attachment" name="attachment"
+                accept=".pdf,.png,.jpg,.jpeg" onFileChange={onFileChange}
             />
-            {formData.attachments && formData.attachments.length > 0 && (
-                <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-1">Archivos Adjuntos:</h4>
-                    <ul className="list-disc list-inside text-sm text-gray-600">
-                        {formData.attachments.map((att, idx) => <li key={idx}>{att.name}</li>)}
-                    </ul>
-                </div>
-            )}
 
             <div className="flex justify-end space-x-3 pt-4">
                 <Button type="button" variant="secondary" onClick={onCancel}>
